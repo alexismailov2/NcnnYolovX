@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export PATH=$PATH:"/c/mingw64/bin/"
+
 build_type=Debug
 if [ -z "$1" ]; then
   echo "build_type='$build_type'";

@@ -5,7 +5,7 @@ ExternalProject_Add(external_ncnn
         GIT_SHALLOW       ON
         GIT_PROGRESS      ON
         CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX=${DEPENDENCIES_PREFIX_PATH}/libncnn
-                          -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAMM}
+                          -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
                           -DCMAKE_BUILD_TYPE_INIT=${CMAKE_BUILD_TYPE}
                           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
                           -DCMAKE_C_COMPILER_WORKS=ON

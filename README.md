@@ -1,2 +1,3 @@
-# NcnnYolovX
-Integration YolovX helpers with ncnn engine usage. (currently v8 available)
+# OIYolo
+
+Integration Only Inference Yolo(OIYolo) helpers with different engine usage(OpenCV, NCNN).

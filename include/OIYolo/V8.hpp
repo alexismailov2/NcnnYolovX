@@ -30,7 +30,8 @@ public:
 #endif
   auto performPrediction(char const* frameData, size_t frameWidth, size_t frameHeight,
                          std::function<bool(std::string const&)>&& filter = [](std::string const&) { return true; },
-                         bool isNeededToBeSwappedRAndB = true) -> Item::List;
+                         bool isNeededToBeSwappedRAndB = true,
+                         bool isAlpha = false) -> Item::List;
 
 private:
   class Impl;

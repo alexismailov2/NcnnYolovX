@@ -270,7 +270,7 @@ public:
 
   auto performPrediction(const char* frameData, size_t frameWidth, size_t frameHeight,
                          std::function<bool(std::string const&)>&& filter = [](std::string const&) { return true; },
-                         bool isNeededToBeSwappedRAndB = true) -> Item::List
+                         bool isNeededToBeSwappedRAndB = true, bool isAlpha = false) -> Item::List
   {
     int width = frameWidth;//frame.cols;
     int height = frameHeight;//frame.rows;
@@ -292,10 +292,10 @@ public:
       w = w * scale;
     }
 
-    ncnn::Mat in = ncnn::Mat::from_pixels_resize((const uint8_t*)frameData,//frame.data,
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize((const uint8_t*)frameData,
                                                  isNeededToBeSwappedRAndB
-                                                     ? ncnn::Mat::PIXEL_RGB2BGR
-                                                     : ncnn::Mat::PIXEL_RGB,
+                                                     ? isAlpha ? ncnn::Mat::PIXEL_RGBA2BGR : ncnn::Mat::PIXEL_RGB2BGR
+                                                     : isAlpha ? ncnn::Mat::PIXEL_RGBA : ncnn::Mat::PIXEL_RGB,
                                                  width,
                                                  height,
                                                  w,
@@ -400,9 +400,10 @@ auto V8::performPrediction(char const* frameData,
                            size_t frameWidth,
                            size_t frameHeight,
                            std::function<bool(std::string const&)>&& filter,
-                           bool isNeededToBeSwappedRAndB) -> Item::List
+                           bool isNeededToBeSwappedRAndB,
+                           bool isAlpha) -> Item::List
 {
-    return _impl->performPrediction(frameData, frameWidth, frameHeight, std::move(filter), isNeededToBeSwappedRAndB);
+    return _impl->performPrediction(frameData, frameWidth, frameHeight, std::move(filter), isNeededToBeSwappedRAndB, isAlpha);
 }
 
 }// OIYolo

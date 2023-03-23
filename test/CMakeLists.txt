@@ -21,6 +21,7 @@ target_include_directories(${PROJECT_NAME}_test1
         ${CMAKE_CURRENT_LIST_DIR}/../include)
 
 if (EMBARCADERO)
+	message(STATUS "NCNN_ROOT=${NCNN_ROOT}")
 	target_link_libraries(${PROJECT_NAME}_test1
 			PRIVATE
 			OIYolo

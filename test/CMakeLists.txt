@@ -20,7 +20,19 @@ target_include_directories(${PROJECT_NAME}_test1
         PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/../include)
 
-target_link_libraries(${PROJECT_NAME}_test1
-        PRIVATE
-        OIYolo
-	-L${NCNN_ROOT}/lib libncnn.a) # TODO: Hack for MinGW
+if (EMBARCADERO)
+	target_link_libraries(${PROJECT_NAME}_test1
+			PRIVATE
+			OIYolo
+			-L${NCNN_ROOT}\\lib ncnn.lib) # TODO: Hack for Embarcadero
+else()
+	target_link_libraries(${PROJECT_NAME}_test1
+			PRIVATE
+			OIYolo
+			-L${NCNN_ROOT}/lib libncnn.a) # TODO: Hack for MinGW
+endif()
+
+#target_link_libraries(${PROJECT_NAME}_test1
+#        PRIVATE
+#        OIYolo
+#	-L${NCNN_ROOT}/lib libncnn.a) # TODO: Hack for MinGW

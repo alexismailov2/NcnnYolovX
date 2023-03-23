@@ -32,9 +32,10 @@ cmake -Bbuild_embarc\
  -DNCNN_XOP=OFF\
  -DNCNN_PIXEL_AFFINE=OFF\
  -DNCNN_INSTALL_SDK=ON
-cp ../cpuid.h ./src/
+cp ../patches/cpuid.h ./src/
 sed -i 's:/:\\:g' ./build_embarc/src/CMakeFiles/ncnn.dir/objects1.rsp
 cmake --build build_embarc --target install
+cd ..
 
 cmake -Bbuild_bcc32\
  -G "Borland Makefiles"\
@@ -45,8 +46,12 @@ cmake -Bbuild_bcc32\
  -DCMAKE_VERBOSE_MAKEFILE=ON\
  -DCMAKE_C_COMPILER_WORKS=ON\
  -DCMAKE_CXX_COMPILER_WORKS=ON\
- -DNCNN_ROOT=./build_embarc/install
-#should be moved to ExternalAdd project
-#cp ../cpuid.h ./src/
-#sed -i 's:/:\\:g' ./build_bcc32/src/CMakeFiles/ncnn.dir/objects1.rsp
+ -DEMBARCADERO=ON\
+ -DNCNN_ROOT=./ncnn/build_embarc/install
+sed -i 's:-Od: :g' "./build_bcc32/CMakeFiles/OIYolo.dir/flags.make"
+sed -i 's:-Od: :g' "./build_bcc32/CMakeFiles/OIYolo.dir/build.make"
+sed -i 's:-Od: :g' "./build_bcc32/test/CMakeFiles/NcnnYolov8_test1.dir/flags.make"
+sed -i 's:-Od: :g' "./build_bcc32/test/CMakeFiles/NcnnYolov8_test1.dir/build.make"
 cmake --build build_bcc32 --target install
+
+./build_bcc32/test/NcnnYolov8Test1.cpp.exe ./assets/parking.jpg ./assets/yolov8s.param ./assets/yolov8s.bin ./assets/yolov8s.classes 640

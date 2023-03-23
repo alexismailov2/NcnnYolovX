@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD 14)
 option(OIYolo_INSTALL "install ncnn library and headers" ON)
 option(OIYolo_OpenCV "use OpenCV library for inference" OFF)
 option(OIYolo_NCNN "use NCNN library for inference" ON)
+option(EMBARCADERO "For Embarcadero there is workarounds" OFF)
 
 if (OIYolo_OpenCV AND OIYolo_NCNN)
 	message(FATAL_ERROR "Only one engine supported at the same time")

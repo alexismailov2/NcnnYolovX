@@ -3,3 +3,4 @@ OIYoloInstall
 build_host
 build_mingw
 build_bcc32
+ncnn

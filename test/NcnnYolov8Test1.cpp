@@ -4,6 +4,7 @@
 #include "jpeg_decoder.h"
 
 #include <vector>
+#include <cstring>
 
 namespace {
 

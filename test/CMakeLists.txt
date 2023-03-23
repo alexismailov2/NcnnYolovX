@@ -22,4 +22,5 @@ target_include_directories(${PROJECT_NAME}_test1
 
 target_link_libraries(${PROJECT_NAME}_test1
         PRIVATE
-        OIYolo)
+        OIYolo
+        ${NCNN_ROOT}/lib/libncnn.a) # TODO: Hack for MinGW

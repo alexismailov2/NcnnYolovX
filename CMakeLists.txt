@@ -8,8 +8,12 @@ endif()
 set(CMAKE_CXX_STANDARD 14)
 
 option(OIYolo_INSTALL "install ncnn library and headers" ON)
-option(OIYolo_OpenCV "use OpenCV library for inference" ON)
+option(OIYolo_OpenCV "use OpenCV library for inference" OFF)
 option(OIYolo_NCNN "use NCNN library for inference" ON)
+
+if (OIYolo_OpenCV AND OIYolo_NCNN)
+	message(FATAL_ERROR "Only one engine supported at the same time")
+endif()
 
 include(cmake/Dependencies.cmake)
 
@@ -25,6 +29,7 @@ target_include_directories(${PROJECT_NAME}
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	if (OIYolo_OpenCV)
 		find_package(OpenCV REQUIRED)
+		add_definitions(-DOIYolo_OpenCV=${OIYolo_OpenCV})
 		target_include_directories(${PROJECT_NAME}
 				PUBLIC
 				${OpenCV_INCLUDE_DIRS})

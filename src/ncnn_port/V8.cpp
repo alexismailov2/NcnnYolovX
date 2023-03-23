@@ -1,12 +1,11 @@
 #include <OIYolo/V8.hpp>
 
-#include <opencv2/dnn.hpp>
-
 #include <ncnn/net.h>
 #include <ncnn/layer.h>
 
 #include <utility>
 #include <fstream>
+#include <cfloat>
 
 namespace OIYolo {
 
@@ -27,10 +26,9 @@ float sigmoid(float x)
   return 1.0f / (1.0f + fast_exp(-x));
 }
 
-float intersection_area(const Item &a, const Item &b)
+float intersection_area(Item const& a, Item const& b)
 {
-  cv::Rect2d inter = cv::Rect2d{a.boundingBox.x, a.boundingBox.y, a.boundingBox.width, a.boundingBox.height} &
-                     cv::Rect2d{b.boundingBox.x, b.boundingBox.y, b.boundingBox.width, b.boundingBox.height};
+  Rect inter = a.boundingBox & b.boundingBox;
   return inter.area();
 }
 
@@ -270,12 +268,12 @@ public:
     _norm_vals[2] = 1.0 / 255.0f;
   }
 
-  auto performPrediction(cv::Mat const& frame,
+  auto performPrediction(const char* frameData, size_t frameWidth, size_t frameHeight,
                          std::function<bool(std::string const&)>&& filter = [](std::string const&) { return true; },
                          bool isNeededToBeSwappedRAndB = true) -> Item::List
   {
-    int width = frame.cols;
-    int height = frame.rows;
+    int width = frameWidth;//frame.cols;
+    int height = frameHeight;//frame.rows;
 
     // pad to multiple of 32
     int w = width;
@@ -294,7 +292,7 @@ public:
       w = w * scale;
     }
 
-    ncnn::Mat in = ncnn::Mat::from_pixels_resize(frame.data,
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize((const uint8_t*)frameData,//frame.data,
                                                  isNeededToBeSwappedRAndB
                                                      ? ncnn::Mat::PIXEL_RGB2BGR
                                                      : ncnn::Mat::PIXEL_RGB,
@@ -369,12 +367,6 @@ public:
     return objects;
   }
 
-//  auto frameExtract(std::vector<::cv::Mat> const& outs,
-//                    cv::Size const& frameSize,
-//                    std::function<bool(std::string const&)>&& filter) const -> Item::List
-//  {
-//  }
-
 private:
   std::vector<std::string> _classes;
   Size _inputSize;
@@ -395,28 +387,23 @@ V8::V8(std::string const& modelFile,
 {
 }
 
-//V8::V8(std::string const& modelFile,
-//       std::string const& classesFile,
-//       Size inputSize,
-//       float confidenceThreshold = 0.25f,
-//       float nmsThreshold = 0.25f)
-//   : Impl(modelFile, {}, inputSize, confidenceThreshold, nmsThreshold)
-//{
-//
-//}
-
+#ifdef OIYolo_OpenCV
 auto V8::performPrediction(cv::Mat const& frame,
                            std::function<bool(std::string const&)>&& filter,
                            bool isNeededToBeSwappedRAndB) -> Item::List
 {
     return _impl->performPrediction(frame, std::move(filter), isNeededToBeSwappedRAndB);
 }
+#endif
 
-//auto frameExtract(std::vector<::cv::Mat> const& outs,
-//                  cv::Size const& frameSize,
-//                  std::function<bool(std::string const&)>&& filter) const -> Item::List
-//{
-//}
+auto V8::performPrediction(char const* frameData,
+                           size_t frameWidth,
+                           size_t frameHeight,
+                           std::function<bool(std::string const&)>&& filter,
+                           bool isNeededToBeSwappedRAndB) -> Item::List
+{
+    return _impl->performPrediction(frameData, frameWidth, frameHeight, std::move(filter), isNeededToBeSwappedRAndB);
+}
 
 }// OIYolo
 

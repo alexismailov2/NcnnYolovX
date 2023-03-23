@@ -20,7 +20,9 @@ include(cmake/Dependencies.cmake)
 add_library(${PROJECT_NAME}
 		src/ncnn_port/V8.cpp)
 
-add_dependencies(${PROJECT_NAME} ${DEPENDENCIES_LIST})
+if (DEFINED ${DEPENDENCIES_LIST})
+	add_dependencies(${PROJECT_NAME} ${DEPENDENCIES_LIST})
+endif()
 
 target_include_directories(${PROJECT_NAME}
 		PUBLIC

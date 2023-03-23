@@ -19,3 +19,5 @@ cmake -Bbuild_mingw\
  -DCMAKE_CXX_COMPILER_WORKS=ON
 # -DCMAKE_INSTALL_PREFIX=$(pwd)/OIYoloInstall
 cmake --build build_mingw --target install
+
+./build_mingw/test/NcnnYolov8_test1.exe ./assets/parking.jpg ./assets/yolov8s.param ./assets/yolov8s.bin ./assets/yolov8s.classes 640

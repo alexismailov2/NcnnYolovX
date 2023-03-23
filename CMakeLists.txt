@@ -55,11 +55,11 @@ else()
 	if (OIYolo_NCNN)
 		target_include_directories(${PROJECT_NAME}
 				PRIVATE
-				C:\\ncnn_test_inference\\ncnn\\build_embarc\\install\\include)
+				${NCNN_ROOT}\\include)
 
 		target_link_libraries(${PROJECT_NAME}
 				PRIVATE
-				-LC:\\ncnn_test_inference\\ncnn\\build_embarc\\install\\lib ncnn.lib)
+				-L${NCNN_ROOT}\\lib ncnn.lib)
 	else()
 		message(FATAL_ERROR "OpenCV supported currently only on Darwin/Linux systems")
 	endif()

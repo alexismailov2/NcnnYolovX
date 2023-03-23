@@ -47,7 +47,7 @@ cmake -Bbuild_bcc32\
  -DCMAKE_C_COMPILER_WORKS=ON\
  -DCMAKE_CXX_COMPILER_WORKS=ON\
  -DEMBARCADERO=ON\
- -DNCNN_ROOT=./ncnn/build_embarc/install\
+ -DNCNN_ROOT=$(pwd)/ncnn/build_embarc/install\
  -DCMAKE_INSTALL_PREFIX=./Install
 sed -i 's:-Od: :g' "./build_bcc32/CMakeFiles/OIYolo.dir/flags.make"
 sed -i 's:-Od: :g' "./build_bcc32/CMakeFiles/OIYolo.dir/build.make"

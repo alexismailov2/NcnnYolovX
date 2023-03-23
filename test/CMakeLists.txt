@@ -25,7 +25,7 @@ if (EMBARCADERO)
 	target_link_libraries(${PROJECT_NAME}_test1
 			PRIVATE
 			OIYolo
-			-L${NCNN_ROOT}\\lib ncnn.lib) # TODO: Hack for Embarcadero
+			${NCNN_ROOT}\\lib\\ncnn.lib) # TODO: Hack for Embarcadero
 else()
 	target_link_libraries(${PROJECT_NAME}_test1
 			PRIVATE

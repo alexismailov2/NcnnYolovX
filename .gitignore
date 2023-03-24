@@ -1,6 +1,10 @@
 OIYoloDependencies
-OIYoloInstall
+OIYoloDependencies64
+OIYolo_Install
+OIYolo_Install64
+build_bcc32x
+build_bcc64
 build_host
 build_mingw
-build_bcc32
+build_bcc32c
 ncnn

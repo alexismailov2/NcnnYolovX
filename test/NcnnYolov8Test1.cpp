@@ -6,6 +6,8 @@
 #include <vector>
 #include <cstring>
 
+#include <stdio.h>
+
 namespace {
 
 bool load_jpg_data(std::string const& fpath,

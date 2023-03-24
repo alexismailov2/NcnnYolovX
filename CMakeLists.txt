@@ -53,13 +53,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	endif()
 else()
 	if (OIYolo_NCNN)
+		message(STATUS "CMAKE_STATIC_LIBRARY_SUFFIX=${CMAKE_STATIC_LIBRARY_SUFFIX}")
 		target_include_directories(${PROJECT_NAME}
 				PRIVATE
 				${NCNN_ROOT}\\include)
 
 		target_link_libraries(${PROJECT_NAME}
 				PRIVATE
-				-L${NCNN_ROOT}\\lib ncnn.lib)
+				-L${NCNN_ROOT}\\lib ncnn${CMAKE_STATIC_LIBRARY_SUFFIX})
 	else()
 		message(FATAL_ERROR "OpenCV supported currently only on Darwin/Linux systems")
 	endif()

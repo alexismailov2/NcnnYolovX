@@ -4,7 +4,7 @@ ExternalProject_Add(external_ncnn
         GIT_REPOSITORY    https://github.com/Tencent/ncnn.git
         GIT_SHALLOW       ON
         GIT_PROGRESS      ON
-        CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX=${DEPENDENCIES_PREFIX_PATH}/libncnn
+        CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX=${NCNN_ROOT}
                           -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
                           -DCMAKE_BUILD_TYPE_INIT=${CMAKE_BUILD_TYPE}
                           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
@@ -23,7 +23,6 @@ ExternalProject_Add(external_ncnn
                           -DNCNN_PIXEL_AFFINE=OFF
                           -DNCNN_INSTALL_SDK=ON)
 
-set(NCNN_ROOT ${DEPENDENCIES_PREFIX_PATH}/libncnn)
 list(APPEND DEPENDENCIES_LIST external_ncnn)
 
 message(STATUS DEPENDENCIES_LIST="${DEPENDENCIES_LIST}")

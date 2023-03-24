@@ -25,7 +25,7 @@ if (EMBARCADERO)
 	target_link_libraries(${PROJECT_NAME}_test1
 			PRIVATE
 			OIYolo
-			${NCNN_ROOT}\\lib\\ncnn.lib) # TODO: Hack for Embarcadero
+			${NCNN_ROOT}\\lib\\ncnn${CMAKE_STATIC_LIBRARY_SUFFIX}) # TODO: Hack for Embarcadero
 else()
 	target_link_libraries(${PROJECT_NAME}_test1
 			PRIVATE
@@ -33,7 +33,3 @@ else()
 			-L${NCNN_ROOT}/lib libncnn.a) # TODO: Hack for MinGW
 endif()
 
-#target_link_libraries(${PROJECT_NAME}_test1
-#        PRIVATE
-#        OIYolo
-#	-L${NCNN_ROOT}/lib libncnn.a) # TODO: Hack for MinGW

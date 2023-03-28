@@ -9,16 +9,18 @@ set(CMAKE_CXX_STANDARD 14)
 
 option(OIYolo_INSTALL "install ncnn library and headers" ON)
 option(OIYolo_OpenCV "use OpenCV library for inference" OFF)
+option(OIYolo_OpenCV_DNN "use OpenCV DNN library for inference" OFF)
 option(OIYolo_NCNN "use NCNN library for inference" ON)
 option(EMBARCADERO "For Embarcadero there is workarounds" OFF)
 
-if (OIYolo_OpenCV AND OIYolo_NCNN)
+if (OIYolo_OpenCV_DNN AND OIYolo_NCNN)
 	message(FATAL_ERROR "Only one engine supported at the same time")
 endif()
 
 include(cmake/Dependencies.cmake)
 
 add_library(${PROJECT_NAME}
+		src/ncnn_port/common.cpp
 		src/ncnn_port/V8.cpp)
 
 if (DEFINED ${DEPENDENCIES_LIST})
@@ -29,10 +31,22 @@ target_include_directories(${PROJECT_NAME}
 		PUBLIC
 		${CMAKE_CURRENT_LIST_DIR}/include)
 
+if (OIYolo_OpenCV)
+	add_definitions(-DOIYolo_OpenCV)
+endif()
+
+if (OIYolo_OpenCV_DNN)
+	add_definitions(-DOIYolo_OpenCV_DNN)
+endif()
+
+if (OIYolo_NCNN)
+	add_definitions(-DOIYolo_NCNN)
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
-	if (OIYolo_OpenCV)
+	if (OIYolo_OpenCV OR OIYolo_OpenCVDNN)
 		find_package(OpenCV REQUIRED)
-		add_definitions(-DOIYolo_OpenCV=${OIYolo_OpenCV})
+
 		target_include_directories(${PROJECT_NAME}
 				PUBLIC
 				${OpenCV_INCLUDE_DIRS})

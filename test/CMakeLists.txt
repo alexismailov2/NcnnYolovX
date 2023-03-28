@@ -1,6 +1,6 @@
 project(NcnnYolov8)
 
-if(OIYolo_OpenCV)
+if(0)#if(OIYolo_OpenCV)
 add_executable(${PROJECT_NAME}_test
         NcnnYolov8Test.cpp)
 

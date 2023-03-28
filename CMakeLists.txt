@@ -75,9 +75,20 @@ else()
 		target_link_libraries(${PROJECT_NAME}
 				PRIVATE
 				-L${NCNN_ROOT}\\lib ncnn${CMAKE_STATIC_LIBRARY_SUFFIX})
-	else()
-		message(FATAL_ERROR "OpenCV supported currently only on Darwin/Linux systems")
 	endif()
+
+	if (OIYolo_OpenCV OR OIYolo_OpenCVDNN)
+		#find_package(OpenCV REQUIRED PATHS ${CUSTOM_OPENCV_BUILD_PATH} NO_DEFAULT_PATH)
+
+                target_include_directories(${PROJECT_NAME}
+                                PUBLIC
+				${CMAKE_CURRENT_SOURCE_DIR}/OIYoloDependencies64/include) #${OpenCV_INCLUDE_DIRS})
+                target_link_libraries(${PROJECT_NAME}
+			        PUBLIC
+				${CMAKE_CURRENT_SOURCE_DIR}/OIYoloDependencies64/lib/opencv_world453.a)#${OpenCV_LIBS})
+        endif()
+	#	message(FATAL_ERROR "OpenCV supported currently only on Darwin/Linux systems")
+	#endif()
 endif()
 
 include(GNUInstallDirs)

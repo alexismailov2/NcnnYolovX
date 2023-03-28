@@ -7,6 +7,13 @@
 #include <ncnn/layer.h>
 #endif
 
+#ifdef OIYolo_OpenCV_DNN
+#include <stdio.h>
+#include <math.h>
+//#include <opencv2/dnn/dnn.hpp>
+#include <opencv2/opencv.hpp>
+#endif
+
 #include <utility>
 #include <fstream>
 #include <cfloat>

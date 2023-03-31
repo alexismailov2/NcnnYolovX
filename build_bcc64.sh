@@ -35,7 +35,7 @@ cmake -Bbuild_bcc64\
  -DNCNN_INSTALL_SDK=ON\
  -DCMAKE_INSTALL_PREFIX=$(pwd)/../OIYoloDependencies64\
  -DDEPENDENCIES_PREFIX_PATH=$(pwd)/../OIYoloDependencies64
-cp ../patches/cpuid.h ./src/
+#cp ../patches/cpuid.h ./src/
 
 cmake --build build_bcc64 --target install
 cd ..
@@ -57,7 +57,10 @@ cmake -Bbuild_bcc64\
  -DOIYolo_NCNN=OFF\
  -DOIYolo_OpenCV_DNN=ON\
  -DCUSTOM_OPENCV_BUILD_PATH=$(pwd)/OIYoloDependencies64\
- -DOpenCV_STATIC=ON
+ -DOpenCV_STATIC=ON\
+ -DOIYolo_NCNN=ON\
+ -DOIYolo_OpenCV_DNN=OFF\
+ -DOIYolo_OpenCV=ON
 cmake --build build_bcc64 --target install
 
-./build_bcc64/test/NcnnYolov8_test1.exe ./assets/parking.jpg ./assets/yolov8s.onnx ./assets/yolov8s.onnx ./assets/yolov8s.classes 640
+./build_bcc64/test/NcnnYolov8_test1.exe ./assets/parking.jpg ./assets/yolov8s-seg.param ./assets/yolov8s-seg.bin ./assets/yolov8s.classes 640

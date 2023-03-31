@@ -1,16 +1,13 @@
 #include <OIYolo/V8.hpp>
 
-#include "common.hpp"
-
 #ifdef OIYolo_NCNN
 #include <ncnn/net.h>
 #include <ncnn/layer.h>
 #endif
 
-#ifdef OIYolo_OpenCV_DNN
+#ifdef OIYolo_OpenCV
 #include <stdio.h>
 #include <math.h>
-//#include <opencv2/dnn/dnn.hpp>
 #include <opencv2/opencv.hpp>
 #endif
 
@@ -91,48 +88,63 @@ public:
   }
 
 private:
-  template<typename Rect>
-  void extractDataFromOutput(std::vector<int>& class_ids,
-                             std::vector<float>& confidences,
-                             std::vector<Rect>& boxes,
-                             float const* classes_scores,
-                             float const* data,
-                             float xFactor,
-                             float yFactor,
-                             std::vector<std::vector<float>>& picked_proposals)
+  struct Obj
   {
-    auto it = std::max_element(classes_scores, classes_scores + _classes.size());
-    double maxClassScore = *it;
+    cv::Rect2f r;
+    float c;
+    uint32_t i;
+    std::vector<float> f;
+  };
 
-    if (maxClassScore >= _confThreshold)
+  // TODO: Not used can be deleted
+  void qsortDescentInplace(std::vector<Obj>& objects, int left, int right)
+  {
+    int i = left;
+    int j = right;
+    float p = objects[(left + right) / 2].c;
+
+    while (i <= j)
     {
-      if (_isSegmentationEnabled)
+      while (objects[i].c > p)
       {
-        int net_width = _classes.size() + 4 + _segChannels;
-        std::vector<float> temp_proto(data + 4 + _classes.size(), data + net_width);
-        picked_proposals.push_back(temp_proto);
+        i++;
       }
 
-      class_ids.push_back(std::distance(classes_scores, it));
-      confidences.push_back(maxClassScore);
+      while (objects[j].c < p)
+      {
+        j--;
+      }
 
-      float x = data[0];
-      float y = data[1];
-      float w = data[2];
-      float h = data[3];
+      if (i <= j)
+      {
+        std::swap(objects[i], objects[j]);
+        i++;
+        j--;
+      }
+    }
 
-      int left = int((x - 0.5 * w) * xFactor);
-      int top = int((y - 0.5 * h) * yFactor);
-      int width = int(w * xFactor);
-      int height = int(h * yFactor);
-
-      boxes.emplace_back(Rect(left, top, width, height));
+#pragma omp parallel sections
+    {
+#pragma omp section
+      {
+        if (left < j)
+        {
+          qsortDescentInplace(objects, left, j);
+        }
+      }
+#pragma omp section
+      {
+        if (i < right)
+        {
+          qsortDescentInplace(objects, i, right);
+        }
+      }
     }
   }
 
-  static void nms_sorted_bboxes(std::vector<Rect> const& boxes,
-                                std::vector<int> &picked,
-                                float nms_threshold)
+  void nmsSortedBboxes(std::vector<Obj> const& boxes,
+                       std::vector<int> &picked,
+                       float nms_threshold)
   {
     picked.clear();
 
@@ -140,17 +152,17 @@ private:
     std::vector<float> areas(n);
     for (int i = 0; i < n; i++)
     {
-      areas[i] = boxes[i].area();
+      areas[i] = boxes[i].r.area();
     }
 
     for (int i = 0; i < n; i++)
     {
-      Rect const &a = boxes[i];
+      auto const& a = boxes[i].r;
 
       int keep = 1;
       for (int j = 0; j < (int) picked.size(); j++)
       {
-        Rect const &b = boxes[picked[j]];
+        auto const& b = boxes[picked[j]].r;
 
         // intersection over union
         float inter_area = (a & b).area();
@@ -167,10 +179,35 @@ private:
         picked.push_back(i);
       }
     }
-  }
+  };
 
-#ifdef OIYolo_OpenCV_DNN
-public:
+  auto findMaxIndexVertical(float const* currentData,
+                            uint32_t rows,
+                            uint32_t cols,
+                            uint32_t classesCount,
+                            std::vector<float>& features) -> float const*
+  {
+    float const* end = &currentData[(rows - 4)* cols];
+    features.reserve(rows - 4 - classesCount);
+    float const* cur = currentData;
+    float const* max = cur;
+    float const* fbegin = &currentData[classesCount * cols];
+    while(cur < fbegin)
+    {
+      if (*cur > *max)
+      {
+        max = cur;
+      }
+      cur += cols;
+    }
+    while(cur < end)
+    {
+      features.push_back(*cur);
+      cur += cols;
+    }
+    return max;
+  };
+
   cv::Mat formatToSquare(const cv::Mat &source)
   {
     int col = source.cols;
@@ -181,72 +218,9 @@ public:
     return result;
   }
 
-  void GetMask(cv::Mat const& maskProposals,
-               cv::Mat const& mask_protos,
-               OIYolo::Item& output,
-               cv::Vec4f params)
-  {
-    cv::Rect temp_rect = (cv::Rect)output.boundingBox;
-    //crop from mask_protos
-    int rang_x = floor((temp_rect.x * params[0] + params[2]) / _inputSize.width * _segSize.width);
-    int rang_y = floor((temp_rect.y * params[1] + params[3]) / _inputSize.height * _segSize.height);
-    int rang_w = ceil(((temp_rect.x + temp_rect.width) * params[0] + params[2]) / _inputSize.width * _segSize.width) - rang_x;
-    int rang_h = ceil(((temp_rect.y + temp_rect.height) * params[1] + params[3]) / _inputSize.height * _segSize.height) - rang_y;
-
-    rang_w = MAX(rang_w, 1);
-    rang_h = MAX(rang_h, 1);
-    if (rang_x + rang_w > _segSize.width)
-    {
-      if (_segSize.width - rang_x > 0)
-      {
-        rang_w = _segSize.width - rang_x;
-      }
-      else
-      {
-        rang_x -= 1;
-      }
-    }
-    if (rang_y + rang_h > _segSize.height)
-    {
-      if (_segSize.height - rang_y > 0)
-      {
-        rang_h = _segSize.height - rang_y;
-      }
-      else
-      {
-        rang_y -= 1;
-      }
-    }
-
-    std::vector<cv::Range> roi_rangs{cv::Range(0, 1),
-                                     cv::Range::all(),
-                                     cv::Range(rang_y, rang_h + rang_y),
-                                     cv::Range(rang_x, rang_w + rang_x)};
-
-    //crop
-    cv::Mat temp_mask_protos = mask_protos(roi_rangs).clone();
-    cv::Mat protos = temp_mask_protos.reshape(0, { _segChannels,rang_w * rang_h });
-    cv::Mat matmul_res = (maskProposals * protos).t();
-    cv::Mat masks_feature = matmul_res.reshape(1, { rang_h,rang_w });
-    cv::Mat dest;
-    cv::Mat mask;
-
-    //sigmoid
-    cv::exp(-masks_feature, dest);
-    dest = 1.0 / (1.0 + dest);
-
-    int left = floor((_inputSize.width / _segSize.width * rang_x - params[2]) / params[0]);
-    int top = floor((_inputSize.height / _segSize.height * rang_y - params[3]) / params[1]);
-    int width = ceil(_inputSize.width / _segSize.width * rang_w / params[0]);
-    int height = ceil(_inputSize.height / _segSize.height * rang_h / params[1]);
-
-    resize(dest, mask, cv::Size(width, height), cv::INTER_NEAREST);
-    output.mask = mask(temp_rect - cv::Point(left, top)) > _maskThreshold;
-  }
-
   void LetterBox(cv::Mat const& image,
                  cv::Mat& outImage,
-                 cv::Vec4d& params,
+                 std::vector<double>& params,
                  const cv::Size& newShape = cv::Size(640, 640),
                  bool autoShape = false,
                  bool scaleFill = false,
@@ -254,17 +228,6 @@ public:
                  int stride = 32,
                  const cv::Scalar& color = cv::Scalar(114, 114, 114))
   {
-    if (false)
-    {
-      int maxLen = MAX(image.rows, image.cols);
-      outImage = cv::Mat::zeros(cv::Size(maxLen, maxLen), CV_8UC3);
-      image.copyTo(outImage(cv::Rect(0, 0, image.cols, image.rows)));
-      params[0] = 1;
-      params[1] = 1;
-      params[3] = 0;
-      params[2] = 0;
-    }
-
     cv::Size shape = image.size();
     float r = std::min((float)newShape.height / (float)shape.height,
                        (float)newShape.width / (float)shape.width);
@@ -312,11 +275,82 @@ public:
     int bottom = int(std::round(dh + 0.1f));
     int left = int(std::round(dw - 0.1f));
     int right = int(std::round(dw + 0.1f));
-    params[0] = ratio[0];
-    params[1] = ratio[1];
-    params[2] = left;
-    params[3] = top;
+    params = std::vector<double>{ratio[0], ratio[1], (double)left, (double)top};
     cv::copyMakeBorder(outImage, outImage, top, bottom, left, right, cv::BORDER_CONSTANT, color);
+  }
+
+#ifdef OIYolo_OpenCV_DNN
+public:
+  void GetMask(std::vector<float> const& f,
+               cv::Mat const& mask_protos,
+               OIYolo::Item& output,
+               std::vector<double> params)//cv::Vec4f params)
+  {
+    cv::Mat maskProposals = cv::Mat(f); // rows: 32, cols: 1, dimension: 2
+    maskProposals = maskProposals.t();  // rows: 1, cols: 32, dimension: 2
+    auto sz0 = mask_protos.size[0];//1, dimension: 4
+    auto sz1 = mask_protos.size[1];//32
+    auto sz2 = mask_protos.size[2];//160
+    auto sz3 = mask_protos.size[3];//160
+    cv::Rect temp_rect = (cv::Rect)output.boundingBox;
+    //crop from mask_protos
+    int rang_x = floor((temp_rect.x * params[0] + params[2]) / _inputSize.width * _segSize.width);
+    int rang_y = floor((temp_rect.y * params[1] + params[3]) / _inputSize.height * _segSize.height);
+    int rang_w = ceil(((temp_rect.x + temp_rect.width) * params[0] + params[2]) / _inputSize.width * _segSize.width) - rang_x;
+    int rang_h = ceil(((temp_rect.y + temp_rect.height) * params[1] + params[3]) / _inputSize.height * _segSize.height) - rang_y;
+
+    rang_w = MAX(rang_w, 1);
+    rang_h = MAX(rang_h, 1);
+    if (rang_x + rang_w > _segSize.width)
+    {
+      if (_segSize.width - rang_x > 0)
+      {
+        rang_w = _segSize.width - rang_x;
+      }
+      else
+      {
+        rang_x -= 1;
+      }
+    }
+    if (rang_y + rang_h > _segSize.height)
+    {
+      if (_segSize.height - rang_y > 0)
+      {
+        rang_h = _segSize.height - rang_y;
+      }
+      else
+      {
+        rang_y -= 1;
+      }
+    }
+
+    std::vector<cv::Range> roi_rangs{cv::Range::all(),
+                                     cv::Range(rang_y, rang_h + rang_y), //12, 22
+                                     cv::Range(rang_x, rang_w + rang_x)}; //128, 132
+
+    //crop
+    cv::Mat temp_mask_protos = mask_protos(roi_rangs).clone();
+    auto ssz1 = temp_mask_protos.size[0];//32 (all) _segChannels
+    auto ssz2 = temp_mask_protos.size[1];//10 (12..22) rang_w
+    auto ssz3 = temp_mask_protos.size[2];//4 (128..132) rang_h
+    cv::Mat protos = temp_mask_protos.reshape(0, { _segChannels, rang_w * rang_h }); // rows: 32, cols: 10 * 4
+    cv::Mat matmul_res = (maskProposals * protos);
+    matmul_res = matmul_res.t();
+    cv::Mat masks_feature = matmul_res.reshape(1, { rang_h,rang_w });
+    cv::Mat dest;
+    cv::Mat mask;
+
+    //sigmoid
+    cv::exp(-masks_feature, dest);
+    dest = 1.0 / (1.0 + dest);
+
+    int left = floor((_inputSize.width / _segSize.width * rang_x - params[2]) / params[0]);
+    int top = floor((_inputSize.height / _segSize.height * rang_y - params[3]) / params[1]);
+    int width = ceil(_inputSize.width / _segSize.width * rang_w / params[0]);
+    int height = ceil(_inputSize.height / _segSize.height * rang_h / params[1]);
+
+    resize(dest, mask, cv::Size(width, height), cv::INTER_NEAREST);
+    output.mask = mask(temp_rect - cv::Point(left, top)) > _maskThreshold;
   }
 
   auto performPrediction(char const* frameData,
@@ -327,10 +361,9 @@ public:
   {
     cv::Mat modelInputAligned;
     cv::Mat modelInput = formatToSquare(cv::Mat((int) frameHeight, (int) frameWidth, CV_8UC3, (void *) frameData));
-#if 1
-    cv::Vec4d params;
+    std::vector<double> params;
     LetterBox(modelInput, modelInputAligned, params, _inputSize);
-#endif
+
     _net.setInput(cv::dnn::blobFromImage(modelInputAligned,
                                          1.0 / 255.0,
                                          _inputSize,
@@ -341,78 +374,63 @@ public:
     std::vector<cv::Mat> outputs;
     _net.forward(outputs, _net.getUnconnectedOutLayersNames());
 
-    if (outputs.size() < 2)
-    {
-      _isSegmentationEnabled = false;
-    }
+    outputs[0] = outputs[0].reshape(1, outputs[0].size[1]);
 
-    int rows = outputs[0].size[1];
-    int dimensions = outputs[0].size[2];
+    float xFactor = (float) modelInput.cols / (float) _inputSize.width;
+    float yFactor = (float) modelInput.rows / (float) _inputSize.height;
 
-    bool yolov8 = false;
-    // yolov5 has an output of shape (batchSize, 25200, 85) (Num classes + box[x,y,w,h] + confidence[c])
-    // yolov8 has an output of shape (batchSize, 84,  8400) (Num classes + box[x,y,w,h])
-    if (dimensions > rows) // Check if the shape[2] is more than shape[1] (yolov8)
-    {
-      yolov8 = true;
-      rows = outputs[0].size[2];
-      dimensions = outputs[0].size[1];
-
-      outputs[0] = outputs[0].reshape(1, dimensions);
-      cv::transpose(outputs[0], outputs[0]);
-    }
-
-    float x_factor = (float) modelInput.cols / (float) _inputSize.width;
-    float y_factor = (float) modelInput.rows / (float) _inputSize.height;
-
-    std::vector<int> class_ids;
-    std::vector<float> confidences;
-    std::vector<Rect> boxes;
     std::vector<std::vector<float>> picked_proposals;
-
-    float *data = (float *)outputs[0].data;
-    for (int i = 0; i < rows; ++i)
+    std::vector<Obj> foundList;
+    float const* data = (float *)outputs[0].ptr<float>();
+    auto cols = outputs[0].cols;
+    auto rows = outputs[0].rows;
+    for (int i = 0; i < cols; ++i)
     {
-      if (yolov8)
+      float const* begin = &data[4 * cols];
+      std::vector<float> f;
+      auto it = findMaxIndexVertical(begin, rows, cols, _classes.size(), f);
+      auto maxConf = *it;
+      if (maxConf > _confThreshold)
       {
-          float* classes_scores = data + 4;
-          extractDataFromOutput(class_ids, confidences, boxes, classes_scores, data, x_factor, y_factor, picked_proposals);
+        float x = data[0 * cols];
+        float y = data[1 * cols];
+        float w = data[2 * cols];
+        float h = data[3 * cols];
+        auto sz = it - begin;
+        auto index = (uint32_t)sz/cols;
+        foundList.emplace_back(Obj{cv::Rect2f{(x - 0.5f * w) * xFactor, (y - 0.5f * h) * yFactor, w * xFactor, h * yFactor}, maxConf, index, std::move(f)});
       }
-      else
-      { // yolov5
-        float confidence = data[4];
-        if (confidence >= _confThreshold)
-        {
-          float* classes_scores = data + 5;
-          extractDataFromOutput(class_ids, confidences, boxes, classes_scores, data, x_factor, y_factor, picked_proposals);
-        }
-      }
-      data += dimensions;
+      data++;
     }
 
-    std::vector<int> nms_result;
-    //cv::dnn::NMSBoxes(boxes, confidences, _confThreshold, _nmsThreshold, nms_result);
-    nms_sorted_bboxes(boxes, nms_result, _nmsThreshold);
-    std::vector<std::vector<float>> temp_mask_proposals;
-    Rect holeImgRect(0, 0, frameWidth, frameHeight);
+    if (foundList.empty()) {
+      return {};
+    }
+
+    //qsortDescentInplace(foundList, 0, foundList.size() - 1);
+
+    std::vector<int> nmsIndexes(foundList.size());
+
+    nmsSortedBboxes(foundList, nmsIndexes, _nmsThreshold);
+
+    auto sliceMat = [](cv::Mat L, int dim, std::vector<int> _sz) -> cv::Mat {
+      cv::Mat M(L.dims - 1, std::vector<int>(_sz.begin() + 1, _sz.end()).data(), CV_32FC1, L.data + L.step[0] * dim);
+      return M;
+    };
+
+    cv::Mat maskProtos = sliceMat(outputs[1], 0, {1,32,160,160});
 
     Item::List detections{};
-    for (auto const& idx : nms_result)
+    cv::Rect2f holeImgRect(0, 0, frameWidth, frameHeight);
+    for (auto const& idx : nmsIndexes)
     {
+      detections.emplace_back(Item{&_classes[foundList[idx].i],
+                                   (int)foundList[idx].i,
+                                   foundList[idx].c,
+                                   (OIYolo::Rect)(foundList[idx].r & holeImgRect)});
       if (_isSegmentationEnabled)
       {
-        temp_mask_proposals.push_back(picked_proposals[idx]);
-      }
-      detections.emplace_back(Item{&_classes[class_ids[idx]],
-                                   class_ids[idx],
-                                   confidences[idx],
-                                   (OIYolo::Rect)(boxes[idx] & holeImgRect)});
-    }
-    if (_isSegmentationEnabled)
-    {
-      for (int i = 0; i < temp_mask_proposals.size(); ++i)
-      {
-        GetMask(cv::Mat(temp_mask_proposals[i]).t(), outputs[1], detections[i], params);
+        GetMask(foundList[idx].f, maskProtos, detections.back(), params);
       }
     }
     return detections;
@@ -421,6 +439,146 @@ public:
 
 #ifdef OIYolo_NCNN
 public:
+  void sigmoid(ncnn::Mat& bottom)
+  {
+    auto op = std::unique_ptr<ncnn::Layer>(ncnn::create_layer("Sigmoid"));
+
+    ncnn::Option opt;
+    opt.num_threads = 4;
+    opt.use_fp16_storage = false;
+    opt.use_packing_layout = false;
+
+    op->create_pipeline(opt);
+    op->forward_inplace(bottom, opt);
+    op->destroy_pipeline(opt);
+  }
+
+  void matmul(std::vector<ncnn::Mat> const &bottom_blobs, ncnn::Mat &top_blob)
+  {
+    auto op = std::unique_ptr<ncnn::Layer>(ncnn::create_layer("MatMul"));
+
+    ncnn::ParamDict pd;
+    pd.set(0, 0);// axis
+
+    op->load_param(pd);
+
+    ncnn::Option opt;
+    opt.num_threads = 2;
+    opt.use_fp16_storage = false;
+    opt.use_packing_layout = false;
+
+    op->create_pipeline(opt);
+    std::vector<ncnn::Mat> top_blobs(1);
+    op->forward(bottom_blobs, top_blobs, opt);
+    top_blob = top_blobs[0];
+
+    op->destroy_pipeline(opt);
+  }
+
+//  void decode_mask(ncnn::Mat const &mask_feat,
+//                   int const &img_w,
+//                   int const &img_h,
+//                   ncnn::Mat const &mask_proto,
+//                   ncnn::Mat const &in_pad,
+//                   int const &wpad,
+//                   int const &hpad,
+//                   ncnn::Mat &mask_pred_result)
+//  {
+//    ncnn::Mat masks;
+//    matmul(std::vector<ncnn::Mat>{mask_feat, mask_proto}, masks);
+//    sigmoid(masks);
+//    reshape(masks, masks.h, in_pad.h / 4, in_pad.w / 4, 0, masks);
+//    slice(masks, (wpad / 2) / 4, (in_pad.w - wpad / 2) / 4, 2, mask_pred_result);
+//    slice(mask_pred_result, (hpad / 2) / 4, (in_pad.h - hpad / 2) / 4, 1, mask_pred_result);
+//    interp(mask_pred_result, 4.0, img_w, img_h, mask_pred_result);
+//  }
+
+  void GetMask(std::vector<float> const& f,
+               cv::Mat const& mask_protos,
+               OIYolo::Item& output,
+               std::vector<double> params)
+  {
+    cv::Mat maskProposals = cv::Mat(f); // rows: 32, cols: 1, dimension: 2
+    maskProposals = maskProposals.t();  // rows: 1, cols: 32, dimension: 2
+
+    //w: 160
+    //h: 160
+    //d: 1
+    //c: 32
+    Rect temp_rect = output.boundingBox;
+    //crop from mask_protos
+    int rang_x = floor((temp_rect.x * params[0] + params[2]) / _inputSize.width * _segSize.width);
+    int rang_y = floor((temp_rect.y * params[1] + params[3]) / _inputSize.height * _segSize.height);
+    int rang_w = ceil(((temp_rect.x + temp_rect.width) * params[0] + params[2]) / _inputSize.width * _segSize.width) - rang_x;
+    int rang_h = ceil(((temp_rect.y + temp_rect.height) * params[1] + params[3]) / _inputSize.height * _segSize.height) - rang_y;
+
+    rang_w = std::max(rang_w, 1);
+    rang_h = std::max(rang_h, 1);
+    if (rang_x + rang_w > _segSize.width)
+    {
+      if (_segSize.width - rang_x > 0)
+      {
+        rang_w = _segSize.width - rang_x;
+      }
+      else
+      {
+        rang_x -= 1;
+      }
+    }
+    if (rang_y + rang_h > _segSize.height)
+    {
+      if (_segSize.height - rang_y > 0)
+      {
+        rang_h = _segSize.height - rang_y;
+      }
+      else
+      {
+        rang_y -= 1;
+      }
+    }
+
+
+    std::vector<cv::Range> roi_rangs{cv::Range::all(),
+                                     cv::Range(rang_y, rang_h + rang_y),
+                                     cv::Range(rang_x, rang_w + rang_x)};
+
+    //crop
+    cv::Mat temp_mask_protos = mask_protos(roi_rangs).clone();
+    cv::Mat protos = temp_mask_protos.reshape(0, { _segChannels,rang_w * rang_h });
+    cv::Mat matmul_res = (maskProposals * protos).t();
+    cv::Mat masks_feature = matmul_res.reshape(1, { rang_h,rang_w });
+    cv::Mat dest;
+    cv::Mat mask;
+
+    //sigmoid
+    cv::exp(-masks_feature, dest);
+    dest = 1.0 / (1.0 + dest);
+
+    int left = floor((_inputSize.width / _segSize.width * rang_x - params[2]) / params[0]);
+    int top = floor((_inputSize.height / _segSize.height * rang_y - params[3]) / params[1]);
+    int width = ceil(_inputSize.width / _segSize.width * rang_w / params[0]);
+    int height = ceil(_inputSize.height / _segSize.height * rang_h / params[1]);
+
+    resize(dest, mask, cv::Size(width, height), cv::INTER_NEAREST);
+    output.mask = mask((cv::Rect)temp_rect - cv::Point(left, top)) > _maskThreshold;
+  }
+
+  static float fast_exp(float x) noexcept
+  {
+    union
+    {
+      uint32_t i;
+      float f;
+    } v{};
+    v.i = (1 << 23) * (1.4426950409 * x + 126.93490512f);
+    return v.f;
+  }
+
+  static float sigmoid(float x) noexcept
+  {
+    return 1.0f / (1.0f + fast_exp(-x));
+  }
+
   auto performPrediction(const char* frameData,
                          size_t frameWidth,
                          size_t frameHeight,
@@ -448,14 +606,22 @@ public:
       w = w * scale;
     }
 #endif
-    ncnn::Mat in = ncnn::Mat::from_pixels_resize((const uint8_t*)frameData,
-                                                 isNeededToBeSwappedRAndB
+    cv::Mat modelInputAligned;
+    cv::Mat modelInput = formatToSquare(cv::Mat((int) frameHeight, (int) frameWidth, CV_8UC3, (void *) frameData));
+#if 1
+    std::vector<double> params;
+    LetterBox(modelInput, modelInputAligned, params, _inputSize);
+#endif
+    ncnn::Mat in = ncnn::Mat::from_pixels/*_resize*/((const uint8_t*)modelInputAligned.data,
+                                                 /*isNeededToBeSwappedRAndB*/true
                                                      ? isAlpha ? ncnn::Mat::PIXEL_RGBA2BGR : ncnn::Mat::PIXEL_RGB2BGR
                                                      : isAlpha ? ncnn::Mat::PIXEL_RGBA : ncnn::Mat::PIXEL_RGB,
-                                                 (int)frameWidth,
-                                                 (int)frameHeight,
-                                                 _inputSize.width,
-                                                 _inputSize.height);
+                                                 (int)modelInputAligned.cols,
+                                                 (int)modelInputAligned.rows);
+                                                 //_inputSize.width,
+                                                 //_inputSize.height);
+    const float norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
+    in.substract_mean_normalize(nullptr, norm_vals);
 #if 0
     // pad to target_size rectangle
     int wpad = (w + 31) / 32 * 32 - w;
@@ -467,165 +633,92 @@ public:
     ncnn::Mat in_pad = in;
 #endif
 
-    const float norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
-    in_pad.substract_mean_normalize(nullptr, norm_vals);
-
     ncnn::Extractor ex = _net.create_extractor();
     ex.input("images", in_pad);
 
-    ncnn::Mat out;
-    ncnn::Mat output;
-    ex.extract("output0", out);
-    ncnn::Mat mask_proto;
+    std::vector<ncnn::Mat> outputs(2);
+    ex.extract("output0", outputs[0]);
     if (_isSegmentationEnabled)
     {
-      ex.extract("output1", mask_proto);
-      if (mask_proto.empty())
+      ex.extract("output1", outputs[1]);
+      if (outputs[1].empty())
       {
         _isSegmentationEnabled = false;
       }
     }
 
-    int rows = out.h;
-    int dimensions = out.w;
+    float xFactor = (float) modelInput.cols / (float) _inputSize.width;
+    float yFactor = (float) modelInput.rows / (float) _inputSize.height;
 
-    bool yolov8 = false;
-    // yolov5 has an output of shape (batchSize, 25200, 85) (Num classes + box[x,y,w,h] + confidence[c])
-    // yolov8 has an output of shape (batchSize, 84,  8400) (Num classes + box[x,y,w,h])
-    if (dimensions > rows) // Check if the shape[2] is more than shape[1] (yolov8)
+    std::vector<Obj> foundList;
+    float const* data = (float *)outputs[0].data;
+    auto cols = outputs[0].w;
+    auto rows = outputs[0].h;
+    for (int i = 0; i < cols; ++i)
     {
-      yolov8 = true;
-      rows = out.w;
-      dimensions = out.h;
-
-      //out = out.reshape(dimensions, /*1*/rows);
-      transpose(out, output);
-    }
-
-    float x_factor = (float) frameWidth / (float) _inputSize.width;
-    float y_factor = (float) frameHeight / (float) _inputSize.height;
-
-    std::vector<int> class_ids;
-    std::vector<float> confidences;
-    std::vector<Rect> boxes;
-    std::vector<std::vector<float>> picked_proposals;
-
-    float *data = (float *)output.data;
-    for (int i = 0; i < rows; ++i)
-    {
-      if (yolov8)
+      float const* begin = &data[4 * cols];
+      std::vector<float> f;
+      auto it = findMaxIndexVertical(begin, rows, cols, _classes.size(), f);
+      auto maxConf = *it;
+      if (maxConf > _confThreshold)
       {
-        float* classes_scores = data + 4;
-        extractDataFromOutput(class_ids, confidences, boxes, classes_scores, data, x_factor, y_factor, picked_proposals);
-      }
-      else
-      { // yolov5
-        float confidence = data[4];
-        if (confidence >= _confThreshold)
-        {
-          float* classes_scores = data + 5;
-          extractDataFromOutput(class_ids, confidences, boxes, classes_scores, data, x_factor, y_factor, picked_proposals);
+        float x = data[0 * cols];
+        float y = data[1 * cols];
+        float w = data[2 * cols];
+        float h = data[3 * cols];
+        if (i >= 6400) {
+          x *= 2;
+          y *= 2;
+          w *= 2;
+          h *= 2;
         }
+        if (i >= 8000) {
+          x *= 2;
+          y *= 2;
+          w *= 2;
+          h *= 2;
+        }
+        auto const sz = it - begin;
+        auto const index = sz/cols;
+        foundList.emplace_back(Obj{cv::Rect2f{(x - 0.5f*w) * xFactor, (y - 0.5f*h) * yFactor, w * xFactor, h * yFactor}, maxConf, (uint32_t)index, std::move(f)});
       }
-      data += dimensions;
+      data++;
     }
 
-    std::vector<int> nms_result;
-    //cv::dnn::NMSBoxes(boxes, confidences, _confThreshold, _nmsThreshold, nms_result);
-    nms_sorted_bboxes(boxes, nms_result, _nmsThreshold);
+    if (foundList.empty()) {
+      return {};
+    }
+
+    //qsortDescentInplace(foundList, 0, foundList.size() - 1);
+
+    std::vector<int> nmsIndexes{};
+    nmsSortedBboxes(foundList, nmsIndexes, _nmsThreshold);
+
     std::vector<std::vector<float>> temp_mask_proposals;
-    Rect holeImgRect(0, 0, frameWidth, frameHeight);
 
     Item::List detections{};
-    for (auto const& idx : nms_result)
+    cv::Rect2f holeImgRect(0, 0, frameWidth, frameHeight);
+
+    // (ncnn)outputs[1] -> (opencv)mask_protos
+    cv::Mat maskProtos({32, outputs[1].h, outputs[1].w}, CV_32FC1);
+    memcpy((uchar*)maskProtos.data, outputs[1].data, outputs[1].w * outputs[1].h * 32 * sizeof(float));
+
+//    auto sliceMat = [](cv::Mat L, int dim, std::vector<int> _sz) -> cv::Mat {
+//      cv::Mat M(L.dims - 1, std::vector<int>(_sz.begin() + 1, _sz.end()).data(), CV_32FC1, L.data + L.step[0] * dim);
+//      return M;
+//    };
+
+    for (auto const& idx : nmsIndexes)
     {
+      detections.emplace_back(Item{&_classes[foundList[idx].i],
+                                   (int)foundList[idx].i,
+                                   foundList[idx].c,
+                                   (OIYolo::Rect)(foundList[idx].r & holeImgRect)});
       if (_isSegmentationEnabled)
       {
-        temp_mask_proposals.push_back(picked_proposals[idx]);
-      }
-      detections.emplace_back(Item{&_classes[class_ids[idx]],
-                                   class_ids[idx],
-                                   confidences[idx],
-                                   (OIYolo::Rect)(boxes[idx] & holeImgRect)});
-    }
-    if (_isSegmentationEnabled)
-    {
-      for (int i = 0; i < temp_mask_proposals.size(); ++i)
-      {
-        //GetMask(cv::Mat(temp_mask_proposals[i]).t(), outputs[1], detections[i], params);
+        GetMask(foundList[idx].f, maskProtos, detections.back(), params);
       }
     }
-
-#if 0
-    std::vector<Item> proposals;
-
-    std::vector<int> strides = {8, 16, 32}; // might have stride=64
-    std::vector<GridAndStride> grid_strides;
-    generate_grids_and_stride(in_pad.w, in_pad.h, strides, grid_strides);
-
-    //TODO: Here should be cut off classes by filter
-    //cv::Mat output0 = cv::Mat(cv::Size(net_output_img[0].size[2], net_output_img[0].size[1]), CV_32F, (float*)net_output_img[0].data).t();
-    generate_proposals(grid_strides, out, _confThreshold, _isSegmentationEnabled, _classes, proposals);
-
-    // sort all proposals by score from highest to lowest
-    qsort_descent_inplace(proposals);
-
-    // apply nms with nms_threshold
-    std::vector<int> picked;
-    nms_sorted_bboxes(proposals, picked, _nmsThreshold);
-
-    int count = picked.size();
-
-    ncnn::Mat mask_pred_result;
-    if (_isSegmentationEnabled)
-    {
-      ncnn::Mat mask_feat = ncnn::Mat(32, count, sizeof(float));
-      for (int i = 0; i < count; i++)
-      {
-        float *mask_feat_ptr = mask_feat.row(i);
-        std::memcpy(mask_feat_ptr, proposals[picked[i]].mask_feat.data(),
-                    sizeof(float) * proposals[picked[i]].mask_feat.size());
-      }
-
-      decode_mask(mask_feat, width, height, mask_proto, in_pad, wpad, hpad, mask_pred_result);
-    }
-
-    Item::List objects(count);
-    for (int i = 0; i < count; i++)
-    {
-      objects[i] = proposals[picked[i]];
-
-      // adjust offset to original unpadded
-      float x0 = (objects[i].boundingBox.x - ((float)wpad / 2)) / scale;
-      float y0 = (objects[i].boundingBox.y - ((float)hpad / 2)) / scale;
-      float x1 = (objects[i].boundingBox.x + objects[i].boundingBox.width - ((float)wpad / 2)) / scale;
-      float y1 = (objects[i].boundingBox.y + objects[i].boundingBox.height - ((float)hpad / 2)) / scale;
-
-      // clip
-      x0 = std::max(std::min(x0, (float)(width - 1)), 0.f);
-      y0 = std::max(std::min(y0, (float)(height - 1)), 0.f);
-      x1 = std::max(std::min(x1, (float)(width - 1)), 0.f);
-      y1 = std::max(std::min(y1, (float)(height - 1)), 0.f);
-
-      objects[i].boundingBox.x = x0;
-      objects[i].boundingBox.y = y0;
-      objects[i].boundingBox.width = x1 - x0;
-      objects[i].boundingBox.height = y1 - y0;
-
-      if (_isSegmentationEnabled)
-      {
-        objects[i].mask = cv::Mat::zeros(height, width, CV_32FC1);
-        cv::Mat mask = cv::Mat(height, width, CV_32FC1, (float *) mask_pred_result.channel(i));
-        mask(cv::Rect2d{objects[i].boundingBox.x,
-                        objects[i].boundingBox.y,
-                        objects[i].boundingBox.width,
-                        objects[i].boundingBox.height}).copyTo(objects[i].mask(cv::Rect2d{objects[i].boundingBox.x,
-                                                                                          objects[i].boundingBox.y,
-                                                                                          objects[i].boundingBox.width,
-                                                                                          objects[i].boundingBox.height}));
-      }
-    }
-#endif
     return detections;
   }
 #endif

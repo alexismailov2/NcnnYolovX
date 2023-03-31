@@ -34,6 +34,14 @@ struct Rect
   {
   }
 
+  Rect(cv::Rect2f rect)
+    : x{(float)rect.x}
+    , y{(float)rect.y}
+    , width{(float)rect.width}
+    , height{(float)rect.height}
+  {
+  }
+
   Rect(cv::Rect2i rect)
     : x{(float)rect.x}
     , y{(float)rect.y}
@@ -95,6 +103,11 @@ struct Rect
   operator cv::Rect2d() const
   {
     return cv::Rect2d{x, y, width, height};
+  }
+
+  operator cv::Rect2f() const
+  {
+    return cv::Rect2f{x, y, width, height};
   }
 
   operator cv::Rect2i() const

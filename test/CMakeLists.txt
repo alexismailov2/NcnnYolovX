@@ -1,6 +1,6 @@
 project(NcnnYolov8)
 
-if(0)#if(OIYolo_OpenCV)
+if(NOT EMBARCADERO)
 add_executable(${PROJECT_NAME}_test
         NcnnYolov8Test.cpp)
 

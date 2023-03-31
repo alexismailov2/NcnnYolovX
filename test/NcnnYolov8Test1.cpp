@@ -78,12 +78,13 @@ auto main(int argc, char** argv) -> int32_t
                            OIYolo::Size{targetSize, targetSize},
                            false,
                            0.3f,
+                           0.3f,
                            0.3f};
 
     OIYolo::Item::List predictions;
     {
       TAKEN_TIME();
-      predictions = yolo.performPrediction((const char*)input.data(), width, height, false);
+      predictions = yolo.performPrediction((const char*)input.data(), width, height, true);
     }
 
     print(predictions);

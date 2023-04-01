@@ -20,6 +20,7 @@ endif()
 include(cmake/Dependencies.cmake)
 
 add_library(${PROJECT_NAME}
+		src/ncnn_port/V8Cls.cpp
 		src/ncnn_port/V8.cpp)
 
 if (DEFINED ${DEPENDENCIES_LIST})

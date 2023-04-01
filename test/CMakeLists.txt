@@ -20,14 +20,31 @@ target_include_directories(${PROJECT_NAME}_test1
         PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/../include)
 
+add_executable(${PROJECT_NAME}Cls_test
+		NcnnYolov8ClsTest.cpp)
+
+target_include_directories(${PROJECT_NAME}Cls_test
+		PRIVATE
+		${CMAKE_CURRENT_LIST_DIR}/../include)
+
 if (EMBARCADERO)
 	message(STATUS "NCNN_ROOT=${NCNN_ROOT}")
 	target_link_libraries(${PROJECT_NAME}_test1
 			PRIVATE
 			OIYolo
 			${NCNN_ROOT}\\lib\\ncnn${CMAKE_STATIC_LIBRARY_SUFFIX}) # TODO: Hack for Embarcadero
+
+	target_link_libraries(${PROJECT_NAME}Cls_test
+			PRIVATE
+			OIYolo
+			${NCNN_ROOT}\\lib\\ncnn${CMAKE_STATIC_LIBRARY_SUFFIX}) # TODO: Hack for Embarcadero
 else()
 	target_link_libraries(${PROJECT_NAME}_test1
+			PRIVATE
+			OIYolo
+			-L${NCNN_ROOT}/lib libncnn.a) # TODO: Hack for MinGW
+
+	target_link_libraries(${PROJECT_NAME}Cls_test
 			PRIVATE
 			OIYolo
 			-L${NCNN_ROOT}/lib libncnn.a) # TODO: Hack for MinGW

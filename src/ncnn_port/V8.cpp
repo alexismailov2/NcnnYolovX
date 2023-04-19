@@ -48,6 +48,7 @@ public:
        float confidenceThreshold,
        float nmsThreshold,
        float maskThreshold,
+       std::vector<float> meanVals,
        std::function<bool(std::string const&)> filter)
     : _classes{readClasses(classesFile)}
     , _inputSize{inputSize}
@@ -55,6 +56,7 @@ public:
     , _confThreshold{confidenceThreshold}
     , _nmsThreshold{nmsThreshold}
     , _maskThreshold{maskThreshold}
+    , _mean_vals{meanVals}
     , _filter{std::move(filter)}
   {
 #ifdef OIYolo_OpenCV_DNN
@@ -70,10 +72,6 @@ public:
 
     _net.load_param(modelFile.c_str());
     _net.load_model(weightsFile.c_str());
-
-    _mean_vals[0] = 103.53f;
-    _mean_vals[1] = 116.28f;
-    _mean_vals[2] = 123.675f;
 #endif
   }
 
@@ -367,7 +365,7 @@ public:
     _net.setInput(cv::dnn::blobFromImage(modelInputAligned,
                                          1.0 / 255.0,
                                          _inputSize,
-                                         cv::Scalar(/*_mean_vals[0], _mean_vals[1], _mean_vals[2]*/),
+                                         cv::Scalar(_mean_vals[0], _mean_vals[1], _mean_vals[2]),
                                          isNeededToBeSwappedRAndB,
                                          false));
 
@@ -407,7 +405,7 @@ public:
       return {};
     }
 
-    //qsortDescentInplace(foundList, 0, foundList.size() - 1);
+    qsortDescentInplace(foundList, 0, foundList.size() - 1);
 
     std::vector<int> nmsIndexes(foundList.size());
 
@@ -418,8 +416,12 @@ public:
       return M;
     };
 
-    cv::Mat maskProtos = sliceMat(outputs[1], 0, {1,32,160,160});
-
+    _isSegmentationEnabled = outputs.size() > 1 && !outputs[1].empty();
+    cv::Mat maskProtos;
+    if (_isSegmentationEnabled)
+    {
+      maskProtos = sliceMat(outputs[1], 0, {1, 32, 160, 160});
+    }
     Item::List detections{};
     cv::Rect2f holeImgRect(0, 0, frameWidth, frameHeight);
     for (auto const& idx : nmsIndexes)
@@ -586,26 +588,47 @@ public:
                          bool isAlpha) -> Item::List
   {
 #if 0
-    int width = (int)frameWidth;
-    int height = (int)frameHeight;
-
+    auto const MAX_STRIDE = 32;
+    auto target_size = _inputSize.width;
     // pad to multiple of 32
-    int w = width;
-    int h = height;
+    int w = frameWidth;
+    int h = frameHeight;
     float scale = 1.f;
     if (w > h)
     {
-      scale = (float)_inputSize.width / (float)w;
-      w = _inputSize.width;
+      scale = (float)target_size / w;
+      w = target_size;
       h = h * scale;
     }
     else
     {
-      scale = (float)_inputSize.width / (float)h;
-      h = _inputSize.width;
+      scale = (float)target_size / h;
+      h = target_size;
       w = w * scale;
     }
+
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize((uint8_t const*)frameData,
+                                                 isNeededToBeSwappedRAndB
+                                                     ? isAlpha
+                                                         ? ncnn::Mat::PIXEL_RGBA2BGR
+                                                         : ncnn::Mat::PIXEL_RGB2BGR
+                                                     : isAlpha
+                                                         ? ncnn::Mat::PIXEL_RGBA
+                                                         : ncnn::Mat::PIXEL_RGB,
+                                                 frameWidth,
+                                                 frameHeight,
+                                                 w,
+                                                 h);
+
+    // pad to target_size rectangle
+    int wpad = (w + MAX_STRIDE-1) / MAX_STRIDE * MAX_STRIDE - w;
+    int hpad = (h + MAX_STRIDE-1) / MAX_STRIDE * MAX_STRIDE - h;
+    ncnn::Mat in_pad;
+    ncnn::copy_make_border(in, in_pad, hpad / 2, hpad - hpad / 2, wpad / 2, wpad - wpad / 2, ncnn::BORDER_CONSTANT, 0.f);
+    const float norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
+    in_pad.substract_mean_normalize(_mean_vals, norm_vals);
 #endif
+#if 1 ////
     cv::Mat modelInputAligned;
     cv::Mat modelInput = formatToSquare(cv::Mat((int) frameHeight, (int) frameWidth, CV_8UC3, (void *) frameData));
 #if 1
@@ -613,7 +636,7 @@ public:
     LetterBox(modelInput, modelInputAligned, params, _inputSize);
 #endif
     ncnn::Mat in = ncnn::Mat::from_pixels/*_resize*/((const uint8_t*)modelInputAligned.data,
-                                                 /*isNeededToBeSwappedRAndB*/true
+                                                 isNeededToBeSwappedRAndB
                                                      ? isAlpha ? ncnn::Mat::PIXEL_RGBA2BGR : ncnn::Mat::PIXEL_RGB2BGR
                                                      : isAlpha ? ncnn::Mat::PIXEL_RGBA : ncnn::Mat::PIXEL_RGB,
                                                  (int)modelInputAligned.cols,
@@ -621,7 +644,7 @@ public:
                                                  //_inputSize.width,
                                                  //_inputSize.height);
     const float norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
-    in.substract_mean_normalize(nullptr, norm_vals);
+    in.substract_mean_normalize(_mean_vals.data(), norm_vals);
 #if 0
     // pad to target_size rectangle
     int wpad = (w + 31) / 32 * 32 - w;
@@ -632,6 +655,7 @@ public:
 #else
     ncnn::Mat in_pad = in;
 #endif
+#endif ////
 
     ncnn::Extractor ex = _net.create_extractor();
     ex.input("images", in_pad);
@@ -660,7 +684,7 @@ public:
       std::vector<float> f;
       auto it = findMaxIndexVertical(begin, rows, cols, _classes.size(), f);
       auto maxConf = *it;
-      if (maxConf > _confThreshold)
+      if (/*maxConf < 1 && */maxConf > _confThreshold)
       {
         float x = data[0 * cols];
         float y = data[1 * cols];
@@ -680,7 +704,10 @@ public:
         }
         auto const sz = it - begin;
         auto const index = sz/cols;
-        foundList.emplace_back(Obj{cv::Rect2f{(x - 0.5f*w) * xFactor, (y - 0.5f*h) * yFactor, w * xFactor, h * yFactor}, maxConf, (uint32_t)index, std::move(f)});
+        foundList.emplace_back(Obj{cv::Rect2f{(x - 0.5f*w) * xFactor,
+                                              (y - 0.5f*h) * yFactor,
+                                              w * xFactor,
+                                              h * yFactor}, maxConf, (uint32_t)index, std::move(f)});
       }
       data++;
     }
@@ -689,7 +716,7 @@ public:
       return {};
     }
 
-    //qsortDescentInplace(foundList, 0, foundList.size() - 1);
+    qsortDescentInplace(foundList, 0, foundList.size() - 1);
 
     std::vector<int> nmsIndexes{};
     nmsSortedBboxes(foundList, nmsIndexes, _nmsThreshold);
@@ -716,7 +743,7 @@ public:
                                    (OIYolo::Rect)(foundList[idx].r & holeImgRect)});
       if (_isSegmentationEnabled)
       {
-        GetMask(foundList[idx].f, maskProtos, detections.back(), params);
+        //GetMask(foundList[idx].f, maskProtos, detections.back(), params);
       }
     }
     return detections;
@@ -734,7 +761,7 @@ private:
   float _nmsThreshold{};
   float _maskThreshold{};
   // TODO: Should be added for configuring
-  float _mean_vals[3];
+  std::vector<float> _mean_vals;
   std::function<bool(std::string const&)> _filter;
 #ifdef OIYolo_OpenCV_DNN
   cv::dnn::Net _net;
@@ -752,6 +779,7 @@ V8::V8(std::string const& modelFile,
        float confidenceThreshold,
        float nmsThreshold,
        float maskThreshold,
+       std::vector<float> meanVals,
        std::function<bool(std::string const&)> filter)
    : _impl{std::make_shared<Impl>(modelFile,
                                   weightsFile,
@@ -761,6 +789,7 @@ V8::V8(std::string const& modelFile,
                                   confidenceThreshold,
                                   nmsThreshold,
                                   maskThreshold,
+                                  meanVals,
                                   std::move(filter))}
 {
 }

@@ -186,11 +186,13 @@ void DrawPred(cv::Mat& img,
     }
     std::string label = *result[i].className + ":" + std::to_string(result[i].confidence);
     int baseLine;
-    cv::Size labelSize = getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+    cv::Size labelSize = getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 1, 2, &baseLine);
+    cv::rectangle(img, cv::Rect(cv::Point(left, top - baseLine*2), cv::Size(labelSize.width, labelSize.height)),
+                  cv::Scalar(255, 255, 255), -1);
     top = cv::max(top, labelSize.height);
     putText(img, label, cv::Point(left, top), cv::FONT_HERSHEY_SIMPLEX, 1, color[result[i].id], 2);
   }
-  addWeighted(img, 0.5, mask, 0.5, 0, img);
+  addWeighted(img, 0.8, mask, 0.5, 0, img);
   imshow("1", img);
   cv::waitKey();
 }
@@ -218,10 +220,10 @@ auto main(int argc, char** argv) -> int32_t
                            argv[3],
                            argv[4],
                            OIYolo::Size{atoi(argv[5]), atoi(argv[5])},
-                           true,//false,
-                           0.2f,
-                           0.2f,
-                           0.2f};
+                           false,
+                           0.7f,
+                           0.7f,
+                           0.7f};
 
     OIYolo::Item::List predictions;
     {
@@ -233,7 +235,7 @@ auto main(int argc, char** argv) -> int32_t
     srand(time(nullptr));
     for (int i = 0; i < 80; i++)
     {
-      color.push_back(cv::Scalar(rand() % 256, rand() % 256, rand() % 256));
+      color.push_back(cv::Scalar(0, 0, 0));
     }
     //draw_objects(input, predictions);
     //draw(input, predictions, cv::Scalar{0x00, 0xFF, 0x00}, 2);

@@ -24,6 +24,10 @@ public:
      float confidenceThreshold = 0.25f,
      float nmsThreshold = 0.25f,
      float maskThreshold = 0.25f,
+     std::vector<float> meanVals = {103.53f,//114
+                                    116.28f,//114
+                                    123.675f//114
+                                    },
      std::function<bool(std::string const&)> filter = [](std::string const&) { return true; });
 
   void setFilter(std::function<bool(std::string const&)>&& filter);

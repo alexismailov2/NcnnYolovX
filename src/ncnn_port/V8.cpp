@@ -743,7 +743,7 @@ public:
                                    (OIYolo::Rect)(foundList[idx].r & holeImgRect)});
       if (_isSegmentationEnabled)
       {
-        //GetMask(foundList[idx].f, maskProtos, detections.back(), params);
+        GetMask(foundList[idx].f, maskProtos, detections.back(), params);
       }
     }
     return detections;

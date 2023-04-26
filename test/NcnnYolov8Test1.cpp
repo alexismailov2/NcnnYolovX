@@ -77,8 +77,8 @@ auto main(int argc, char** argv) -> int32_t
                            argv[4],
                            OIYolo::Size{targetSize, targetSize},
                            false,
-                           0.3f,
-                           0.3f,
+                           0.25f,
+                           0.7f,
                            0.3f};
 
     OIYolo::Item::List predictions;

@@ -362,7 +362,7 @@ public:
     std::vector<double> params;
     LetterBox(modelInput, modelInputAligned, params, _inputSize);
 
-    _net.setInput(cv::dnn::blobFromImage(modelInputAligned,
+    _net.setInput(cv::dnn::blobFromImage(modelInput,//Aligned,
                                          1.0 / 255.0,
                                          _inputSize,
                                          cv::Scalar(_mean_vals[0], _mean_vals[1], _mean_vals[2]),
@@ -635,14 +635,14 @@ public:
     std::vector<double> params;
     LetterBox(modelInput, modelInputAligned, params, _inputSize);
 #endif
-    ncnn::Mat in = ncnn::Mat::from_pixels/*_resize*/((const uint8_t*)modelInputAligned.data,
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize((const uint8_t*)modelInput/*Aligned*/.data,
                                                  isNeededToBeSwappedRAndB
                                                      ? isAlpha ? ncnn::Mat::PIXEL_RGBA2BGR : ncnn::Mat::PIXEL_RGB2BGR
                                                      : isAlpha ? ncnn::Mat::PIXEL_RGBA : ncnn::Mat::PIXEL_RGB,
-                                                 (int)modelInputAligned.cols,
-                                                 (int)modelInputAligned.rows);
-                                                 //_inputSize.width,
-                                                 //_inputSize.height);
+                                                 (int)modelInput/*Aligned*/.cols,
+                                                 (int)modelInput/*Aligned*/.rows,//);
+                                                 _inputSize.width,
+                                                 _inputSize.height);
     const float norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
     in.substract_mean_normalize(_mean_vals.data(), norm_vals);
 #if 0

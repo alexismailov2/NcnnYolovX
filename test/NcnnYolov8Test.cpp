@@ -221,9 +221,9 @@ auto main(int argc, char** argv) -> int32_t
                            argv[4],
                            OIYolo::Size{atoi(argv[5]), atoi(argv[5])},
                            false,
+                           0.25f,
                            0.7f,
-                           0.7f,
-                           0.7f};
+                           0.3f};
 
     OIYolo::Item::List predictions;
     {
